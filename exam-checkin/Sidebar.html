@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <style>
+    body { font-family: Arial, sans-serif; margin: 12px; color: #202124; }
+    h2 { font-size: 16px; margin: 0 0 8px; }
+    #scan { width: 100%; box-sizing: border-box; font-size: 20px; padding: 10px; border: 3px solid #1a73e8; border-radius: 6px; }
+    #status { margin-top: 12px; padding: 14px; border-radius: 6px; font-size: 16px; font-weight: bold; min-height: 48px; }
+    .idle    { background: #e8f0fe; color: #174ea6; }
+    .success { background: #ceead6; color: #0d652d; }
+    .waiting { background: #fef7e0; color: #8a5a00; }
+    .error   { background: #fce8e6; color: #a50e0e; }
+    #pending { margin-top: 8px; font-size: 13px; }
+    #pending button { margin-left: 6px; }
+    #stats { margin-top: 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; font-size: 13px; }
+    #stats div { background: #f1f3f4; padding: 6px; border-radius: 4px; }
+    #stats b { font-size: 18px; display: block; }
+    #history { margin-top: 12px; font-size: 12px; padding-left: 18px; }
+    #history li { margin-bottom: 4px; }
+    .hint { font-size: 12px; color: #5f6368; margin-top: 6px; }
+  </style>
+</head>
+<body>
+  <h2>Exam Scanner</h2>
+  <input id="scan" type="text" autocomplete="off" placeholder="Click here, then scan…" autofocus>
+  <div class="hint">Check-in: scan ID card → exam QR. Check-out: scan exam QR only. Esc cancels.</div>
+  <div id="status" class="idle">Ready. Scan a student ID (check-in) or an exam QR (check-out).</div>
+  <div id="pending"></div>
+  <div id="stats"></div>
+  <ol id="history"></ol>
+
+  <script>
+    var input = document.getElementById('scan');
+    var pendingSid = '', pendingName = '', pendingTimer = null, timeoutSec = 90;
+    var queue = [], busy = false;
+
+    function focusInput() { if (document.activeElement !== input) input.focus(); }
+    input.addEventListener('blur', function () { setTimeout(focusInput, 50); });
+    setInterval(focusInput, 1000);
+
+    input.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault();
+        var code = input.value.trim();
+        input.value = '';
+        if (code) { queue.push(code); next(); }
+      } else if (e.key === 'Escape') {
+        input.value = '';
+        setPending('', '');
+        setStatus('idle', 'Cancelled. Ready.');
+      }
+    });
+
+    // Scans are sent one at a time because each result decides the next pending student.
+    function next() {
+      if (busy || !queue.length) return;
+      busy = true;
+      var code = queue.shift();
+      google.script.run
+        .withSuccessHandler(function (res) {
+          setPending(res.pendingSid, res.pendingName);
+          setStatus(res.level, res.message);
+          addHistory(res.level, res.message);
+          showStats(res.stats);
+          beep(res.level);
+          busy = false; next();
+        })
+        .withFailureHandler(function (err) {
+          setPending('', '');
+          setStatus('error', 'Script error: ' + (err && err.message ? err.message : err));
+          addHistory('error', 'Error on scan ' + code);
+          beep('error');
+          busy = false; next();
+        })
+        .processScan(code, pendingSid);
+    }
+
+    function setPending(sid, name) {
+      pendingSid = sid || ''; pendingName = name || '';
+      clearTimeout(pendingTimer);
+      var el = document.getElementById('pending');
+      if (!pendingSid) { el.innerHTML = ''; return; }
+      el.textContent = 'Waiting for exam QR for ' + pendingName + ' (' + pendingSid + ')';
+      var btn = document.createElement('button');
+      btn.textContent = 'Cancel';
+      btn.onclick = function () { setPending('', ''); setStatus('idle', 'Cancelled. Ready.'); focusInput(); };
+      el.appendChild(btn);
+      pendingTimer = setTimeout(function () {
+        setStatus('error', 'Timed out waiting for exam QR for ' + pendingName + '. Scan the ID again.');
+        setPending('', '');
+        beep('error');
+      }, timeoutSec * 1000);
+    }
+
+    function setStatus(level, msg) {
+      var el = document.getElementById('status');
+      el.className = level;
+      el.textContent = msg;
+    }
+
+    function addHistory(level, msg) {
+      var li = document.createElement('li');
+      li.className = level;
+      li.textContent = new Date().toLocaleTimeString() + ' — ' + msg;
+      var list = document.getElementById('history');
+      list.insertBefore(li, list.firstChild);
+      while (list.children.length > 10) list.removeChild(list.lastChild);
+    }
+
+    function showStats(s) {
+      if (!s) return;
+      document.getElementById('stats').innerHTML =
+        '<div><b>' + s.checkedIn + '</b>checked in</div>' +
+        '<div><b>' + s.checkedOut + '</b>checked out</div>' +
+        '<div><b>' + s.stillOut + '</b>exams still out</div>' +
+        '<div><b>' + (s.total - s.checkedIn) + '</b>not yet checked in</div>';
+    }
+
+    var audioCtx = null;
+    function beep(level) {
+      try {
+        audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+        var tones = level === 'error' ? [220, 180] : level === 'waiting' ? [660] : [880, 1320];
+        tones.forEach(function (f, i) {
+          var o = audioCtx.createOscillator(), g = audioCtx.createGain();
+          o.frequency.value = f; o.connect(g); g.connect(audioCtx.destination);
+          g.gain.value = 0.15;
+          var t = audioCtx.currentTime + i * 0.15;
+          o.start(t); o.stop(t + 0.12);
+        });
+      } catch (e) { /* sound is optional */ }
+    }
+
+    google.script.run.withSuccessHandler(function (cfg) {
+      timeoutSec = cfg.pendingTimeoutSec || 90;
+      showStats(cfg.stats);
+    }).getScannerConfig();
+    focusInput();
+  </script>
+</body>
+</html>
