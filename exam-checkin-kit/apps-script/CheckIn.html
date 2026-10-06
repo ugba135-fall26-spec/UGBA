@@ -1,0 +1,1267 @@
+<!DOCTYPE html>
+<html>
+<head>
+<base target="_top">
+<meta charset="utf-8">
+<title>Exam check-in</title>
+<style>
+  :root {
+    --bg: #f4f5f7; --card: #fff; --ink: #1b1f24; --muted: #5b6470; --line: #d8dce2;
+    --ok: #146c2e; --ok-bg: #e3f3e7; --warn: #8a4f00; --warn-bg: #fff1d6;
+    --err: #b3261e; --err-bg: #fde7e5; --info: #1a56b0; --info-bg: #e7effd;
+    --out: #4b2c84; --out-bg: #f3effb;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 16px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  button { font: inherit; }
+  [hidden] { display: none !important; }
+  body.out .in-only, body:not(.out) .out-only { display: none !important; }
+  .top { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 10px 20px;
+         background: #1b1f24; color: #fff; }
+  body.out .top { background: var(--out); }
+  .title { font-weight: 700; font-size: 19px; }
+  .chip { background: #fff; color: var(--ink); border: 0; border-radius: 999px; padding: 4px 14px;
+          font-weight: 700; cursor: pointer; }
+  .modes { display: inline-flex; background: rgba(255, 255, 255, .16); border-radius: 999px; padding: 3px; }
+  .modes button { border: 0; background: transparent; color: #dfe3e8; padding: 4px 14px; border-radius: 999px;
+                  font-weight: 700; cursor: pointer; }
+  .modes button.on { background: #fff; color: var(--ink); }
+  .progress { font-size: 17px; }
+  .progress b { font-size: 21px; }
+  .sync { margin-left: auto; font-weight: 600; padding: 3px 10px; border-radius: 6px; }
+  .sync.ok { color: #8fe3a5; } .sync.off { background: #ffcc66; color: #3a2600; }
+  .who { color: #c3c9d1; font-size: 13px; }
+  main { max-width: 1180px; margin: 0 auto; padding: 16px 20px 40px; }
+
+  .banner { border-radius: 12px; padding: 18px 22px; margin-bottom: 14px; border: 3px solid transparent;
+            min-height: 112px; }
+  .banner.idle { background: var(--card); border-color: var(--line); }
+  body.out .banner.idle { background: var(--out-bg); border-color: #c4b3e6; }
+  body.out .banner.idle .b-title { color: var(--out); }
+  .banner.info { background: var(--info-bg); border-color: #b9cdf5; }
+  .banner.ok   { background: var(--ok-bg);   border-color: #7cc592; }
+  .banner.warn { background: var(--warn-bg); border-color: #f0b449; }
+  .banner.err  { background: var(--err-bg);  border-color: #ee8a82; }
+  .b-title { font-size: 30px; font-weight: 750; line-height: 1.2; }
+  .banner.ok .b-title { color: var(--ok); } .banner.warn .b-title { color: var(--warn); }
+  .banner.err .b-title { color: var(--err); } .banner.info .b-title { color: var(--info); }
+  .b-detail { font-size: 18px; margin-top: 6px; }
+  .b-actions { margin-top: 12px; display: flex; gap: 10px; flex-wrap: wrap; }
+  .b-actions:empty { display: none; }
+  .b-form { margin-top: 12px; display: flex; gap: 10px; }
+  .b-form input { flex: 1; font-size: 20px; padding: 8px 12px; border: 2px solid var(--line); border-radius: 8px; }
+
+  .btn { background: var(--card); border: 2px solid var(--line); border-radius: 8px; padding: 8px 16px;
+         cursor: pointer; font-weight: 600; color: var(--ink); }
+  .btn:hover { border-color: #9aa3ae; }
+  .btn.primary { background: var(--ink); color: #fff; border-color: var(--ink); }
+  .btn.danger { background: var(--err); color: #fff; border-color: var(--err); }
+  .btn.big { font-size: 20px; padding: 12px 22px; }
+  .btn.small { padding: 3px 10px; font-size: 14px; }
+  .link { background: none; border: 0; color: var(--info); cursor: pointer; text-decoration: underline; }
+
+  .cards { display: grid; grid-template-columns: 1.5fr 1fr; gap: 14px; }
+  .card { background: var(--card); border: 3px solid var(--line); border-radius: 12px; padding: 14px 18px; min-height: 124px; }
+  .card.ok { border-color: #7cc592; } .card.warn { border-color: #f0b449; } .card.err { border-color: #ee8a82; }
+  .card-label { font-size: 13px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .stu-main { font-size: 34px; font-weight: 750; margin-top: 4px; overflow-wrap: anywhere; }
+  .sheet-main { font-size: 40px; font-weight: 800; margin-top: 2px; font-variant-numeric: tabular-nums; }
+  .placeholder { color: #a3aab4; font-weight: 600; }
+  .sub { color: var(--muted); font-size: 15px; }
+
+  .entry { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
+  #scan { flex: 1; min-width: 320px; font-size: 22px; padding: 10px 14px; border: 3px solid var(--info);
+          border-radius: 10px; outline: none; }
+  body.out #scan { border-color: #7a52c7; }
+  .hint { color: var(--muted); font-size: 14px; margin-top: 6px; }
+
+  .search { background: var(--card); border: 3px solid var(--info); border-radius: 12px; padding: 14px 18px; margin-top: 14px; }
+  .search-row { display: flex; gap: 10px; align-items: center; }
+  #q { flex: 1; font-size: 20px; padding: 8px 12px; border: 2px solid var(--line); border-radius: 8px; }
+  .results { list-style: none; padding: 0; margin: 10px 0 0; }
+  .results li { margin: 6px 0; }
+  .results button { width: 100%; text-align: left; font-size: 18px; padding: 8px 12px; }
+  .results .tag { color: var(--warn); font-weight: 600; font-size: 15px; }
+  #still { border-color: #7a52c7; }
+  #stillTitle { flex: 1; font-size: 19px; }
+
+  .attention { background: var(--err-bg); border: 3px solid #ee8a82; border-radius: 12px; padding: 12px 18px; margin-bottom: 14px; }
+  .att-head { display: flex; gap: 10px; align-items: center; }
+  .att-head .link { margin-left: auto; }
+  .attention ul { margin: 6px 0 0; padding-left: 20px; }
+
+  .recent { margin-top: 22px; }
+  .recent h2 { font-size: 16px; color: var(--muted); margin: 0 0 6px; }
+  table { width: 100%; border-collapse: collapse; background: var(--card); border-radius: 10px; overflow: hidden; }
+  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid #eceef1; font-size: 15px; }
+  th { background: #eceef1; font-size: 13px; color: var(--muted); }
+  tr.undone td { color: #9aa1aa; text-decoration: line-through; }
+  #recentBody td { white-space: nowrap; }
+  #recentBody td:nth-child(3), #recentBody td:nth-child(7) { white-space: normal; }
+  #recentBody td:nth-child(7) { max-width: 340px; }
+  .pill { font-size: 13px; font-weight: 700; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+  .pill.saved { background: var(--ok-bg); color: var(--ok); }
+  .pill.pending { background: var(--warn-bg); color: var(--warn); }
+  .pill.attention { background: var(--err-bg); color: var(--err); }
+  .pill.undone, .pill.replaced { background: #eceef1; color: var(--muted); }
+  .kind { font-size: 12px; font-weight: 800; padding: 2px 7px; border-radius: 4px; letter-spacing: .04em; }
+  .kind.in { background: var(--info-bg); color: var(--info); }
+  .kind.out { background: #ece4fa; color: var(--out); }
+  .table-wrap { overflow-x: auto; border-radius: 10px; }
+
+  .overlay { position: fixed; inset: 0; background: rgba(20, 24, 30, .78); display: flex;
+             align-items: center; justify-content: center; z-index: 10; }
+  .overlay.pause { background: rgba(179, 38, 30, .88); cursor: pointer; }
+  .panel { background: var(--card); border-radius: 16px; padding: 28px 34px; max-width: 620px; width: calc(100% - 32px); }
+  .overlay.pause .panel { text-align: center; }
+  .panel h1 { margin: 0 0 8px; font-size: 28px; }
+  .stations { display: flex; gap: 10px; flex-wrap: wrap; margin: 10px 0; }
+  @media (max-width: 760px) { .cards { grid-template-columns: 1fr; } #scan { flex-basis: 100%; min-width: 0; } }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="title"><span id="exam">Exam</span> <span class="in-only">check-in</span><span class="out-only">check-out</span></div>
+  <button id="stationBtn" class="chip" title="Change station">Station ?</button>
+  <div class="modes" role="group" aria-label="Mode">
+    <button id="modeIn" class="on">Check-in</button>
+    <button id="modeOut">Check-out</button>
+  </div>
+  <div id="progress" class="progress"></div>
+  <div id="sync" class="sync ok">&#9679; Connected</div>
+  <div id="who" class="who"></div>
+</header>
+
+<main>
+  <div id="attention" class="attention" hidden>
+    <div class="att-head"><strong>Needs attention after the exam</strong>
+      <span class="sub">(also on the Check-in Log tab)</span>
+      <button id="attDismiss" class="link">Dismiss</button></div>
+    <ul id="attList"></ul>
+  </div>
+
+  <section id="banner" class="banner idle" role="status" aria-live="polite">
+    <div id="bTitle" class="b-title">Scan the student's ID card</div>
+    <div id="bDetail" class="b-detail"></div>
+    <div id="bForm" class="b-form" hidden>
+      <input id="walkName" type="text" autocomplete="off" placeholder="Student's full name">
+      <button id="walkGo" class="btn primary">Continue</button>
+    </div>
+    <div id="bActions" class="b-actions"></div>
+  </section>
+
+  <div class="cards">
+    <div id="stuCard" class="card">
+      <div class="card-label"><span class="in-only">1 &middot; Student</span><span class="out-only">Student</span></div>
+      <div id="stuMain" class="stu-main placeholder">Scan ID card</div>
+      <div id="stuSub" class="sub"></div>
+    </div>
+    <div id="sheetCard" class="card">
+      <div class="card-label"><span class="in-only">2 &middot; Answer sheet</span><span class="out-only">Answer sheet turned in</span></div>
+      <div id="sheetMain" class="sheet-main placeholder">Scan QR code</div>
+      <div id="sheetSub" class="sub"></div>
+    </div>
+  </div>
+
+  <div class="entry">
+    <input id="scan" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+           placeholder="Scan here, or type an SID or sheet number and press Enter">
+    <button id="findBtn" class="btn">Find by name</button>
+    <button id="stillBtn" class="btn out-only">Who's still in?</button>
+    <button id="cancelBtn" class="btn">Cancel (Esc)</button>
+  </div>
+  <div class="hint in-only">No ID card? Type the student's SID and press Enter, or use <b>Find by name</b>,
+    and check identity another way (for example a driver's license).</div>
+  <div class="hint out-only">QR code won't scan? Type the number printed next to it (for example 137) and press Enter.
+    To make sure a sheet belongs to the student handing it in, scan their ID card first.</div>
+
+  <section id="search" class="search" hidden>
+    <div class="search-row">
+      <input id="q" type="text" autocomplete="off" spellcheck="false" placeholder="Part of the student's name (or SID)">
+      <button id="searchClose" class="btn">Close (Esc)</button>
+    </div>
+    <div id="searchMsg" class="sub"></div>
+    <ul id="results" class="results"></ul>
+  </section>
+
+  <section id="still" class="search" hidden>
+    <div class="search-row">
+      <strong id="stillTitle">Still in the room</strong>
+      <button id="stillRefresh" class="btn">Refresh</button>
+      <button id="stillClose" class="btn">Close</button>
+    </div>
+    <div id="stillMsg" class="sub" style="margin:6px 0 8px"></div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Student</th><th>SID</th><th>Answer sheet</th></tr></thead>
+      <tbody id="stillBody"></tbody>
+    </table></div>
+  </section>
+
+  <section class="recent">
+    <h2>Recent at this station</h2>
+    <div class="table-wrap"><table>
+      <thead><tr><th></th><th>Time</th><th>Student</th><th>SID</th><th>Sheet</th><th>ID method</th><th>Status</th><th></th></tr></thead>
+      <tbody id="recentBody"></tbody>
+    </table></div>
+    <div id="recentEmpty" class="sub" style="padding:8px 2px">Nothing yet.</div>
+  </section>
+</main>
+
+<div id="startOverlay" class="overlay">
+  <div class="panel">
+    <h1>Exam check-in</h1>
+    <p id="startMsg" class="sub">Connecting&hellip;</p>
+    <p><b>Which station is this?</b></p>
+    <div class="stations" id="stations">
+      <button class="btn big" data-st="Station 1">Station 1</button>
+      <button class="btn big" data-st="Station 2">Station 2</button>
+      <button class="btn big" data-st="Station 3">Station 3</button>
+      <button class="btn big" data-st="Station 4">Station 4</button>
+    </div>
+    <p class="sub">Choosing a station also turns on the sounds. Keep this window in front while scanning.
+      Switch between Check-in and Check-out in the top bar.</p>
+  </div>
+</div>
+
+<div id="pauseOverlay" class="overlay pause" hidden>
+  <div class="panel">
+    <h1>Scanning paused</h1>
+    <p>This window isn't active, so a scan would type into some other window.</p>
+    <p><b>Click here to continue.</b></p>
+  </div>
+</div>
+
+<div id="fatalOverlay" class="overlay" hidden>
+  <div class="panel">
+    <h1 id="fatalTitle">Can't start</h1>
+    <p id="fatalMsg"></p>
+    <button id="fatalRetry" class="btn primary big">Try again</button>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+  var input = $('scan');
+  var QKEY = 'examCheckinQueue', STKEY = 'examCheckinStation', MODEKEY = 'examCheckinMode';
+  var TEXT = {
+    in: { word: 'check-in', idleTitle: 'Scan the student’s ID card',
+          idleDetail: 'Then scan the QR code on the answer sheet you hand them.',
+          cancelled: 'Cancelled. Scan the next student’s ID card.', stuPh: 'Scan ID card',
+          placeholder: 'Scan here, or type an SID or sheet number and press Enter' },
+    out: { word: 'check-out', idleTitle: 'Scan each answer sheet as it’s turned in',
+           idleDetail: 'Scanning the sheet’s QR code checks that student out.',
+           cancelled: 'Cancelled. Scan the next answer sheet.', stuPh: 'Shown after the scan',
+           placeholder: 'Scan the answer sheet’s QR code, or type its number and press Enter' }
+  };
+  var S = {
+    cfg: null, ready: false, started: false, station: '', mode: 'in', stats: null,
+    student: null,   // {state: loading|ok|warn|error, key, id, name, raw, method, existing, walkIn, walkInName, replace, late, offline}
+    sheet: null,     // {key, label, raw}
+    busy: false, backlog: [], recent: [], queue: [], attention: [],
+    flushing: false, online: true, lastPing: 0,
+    keyTimes: [], autoTimer: null, audio: null, seq: 0, formMode: false
+  };
+
+  // ------------------------------------------------------------ server
+  function call(fn, arg, ms) {
+    return new Promise(function (resolve, reject) {
+      var done = false;
+      var timer = setTimeout(function () {
+        if (!done) { done = true; reject(new Error('no reply in ' + Math.round((ms || 15000) / 1000) + ' s')); }
+      }, ms || 15000);
+      google.script.run
+        .withSuccessHandler(function (r) {
+          if (done) return;
+          done = true; clearTimeout(timer);
+          resolve(r || { ok: false, message: 'Empty reply from the server.' });
+        })
+        .withFailureHandler(function (e) {
+          if (done) return;
+          done = true; clearTimeout(timer); reject(e);
+        })[fn](arg);
+    });
+  }
+  function errText(e) { return (e && e.message) ? e.message : String(e); }
+
+  // ------------------------------------------------------------ storage
+  function lsGet(k) { try { return window.localStorage.getItem(k); } catch (e) { return null; } }
+  function lsSet(k, v) { try { window.localStorage.setItem(k, v); } catch (e) { /* in-memory only */ } }
+  function saveQueue() { lsSet(QKEY, JSON.stringify(S.queue)); }
+  function loadQueue() {
+    try { S.queue = JSON.parse(lsGet(QKEY) || '[]') || []; } catch (e) { S.queue = []; }
+    S.queue.forEach(function (item) {
+      item.kind = item.kind || 'in';
+      S.recent.push(recentFrom(item.disp, 'pending', item.qid));
+    });
+  }
+
+  // ------------------------------------------------------------ sounds
+  function initAudio() {
+    try {
+      if (!S.audio) S.audio = new (window.AudioContext || window.webkitAudioContext)();
+      if (S.audio.state === 'suspended') S.audio.resume();
+    } catch (e) { S.audio = null; }
+  }
+  function beep(kind) {
+    var a = S.audio;
+    if (!a) return;
+    var spec = {
+      ok:   [[880, 0.09, 'sine'], [1320, 0.14, 'sine']],
+      tick: [[1200, 0.05, 'sine']],
+      warn: [[660, 0.18, 'triangle'], [520, 0.22, 'triangle']],
+      err:  [[220, 0.22, 'square'], [180, 0.3, 'square']]
+    }[kind];
+    var t = a.currentTime + 0.01;
+    spec.forEach(function (s) {
+      var o = a.createOscillator(), g = a.createGain();
+      o.type = s[2]; o.frequency.value = s[0];
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(kind === 'err' ? 0.12 : 0.25, t + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + s[1]);
+      o.connect(g); g.connect(a.destination);
+      o.start(t); o.stop(t + s[1] + 0.02);
+      t += s[1];
+    });
+  }
+
+  // ------------------------------------------------------------ display
+  function banner(kind, title, detail, actions, form) {
+    S.offlineBanner = false;
+    var b = $('banner');
+    b.className = 'banner ' + kind;
+    $('bTitle').textContent = title;
+    $('bDetail').textContent = detail || '';
+    var box = $('bActions');
+    box.textContent = '';
+    (actions || []).forEach(function (a) {
+      var btn = document.createElement('button');
+      btn.className = 'btn big' + (a.primary ? ' primary' : '');
+      btn.textContent = a.label;
+      btn.addEventListener('click', function () { a.fn(); });
+      box.appendChild(btn);
+    });
+    S.formMode = !!form;
+    $('bForm').hidden = !form;
+    if (form) { $('walkName').value = ''; setTimeout(function () { $('walkName').focus(); }, 0); }
+  }
+
+  function idle(detail) {
+    if (S.mode === 'in' && S.sheet && !S.student) {
+      banner('info', 'Answer sheet ' + S.sheet.label + ' is ready', 'Now scan the student’s ID card (or type the SID).');
+    } else if (S.mode === 'in' && S.student && S.student.state === 'ok' && !S.sheet) {
+      banner('info', 'Now scan the answer sheet', 'for ' + S.student.name +
+        (S.student.replace ? ' — a NEW sheet; take back ' + S.student.existing.sheet : ''));
+    } else {
+      banner('idle', TEXT[S.mode].idleTitle, detail || TEXT[S.mode].idleDetail);
+    }
+    renderCards();
+  }
+
+  function renderCards() {
+    var st = S.student, sh = S.sheet;
+    var card = $('stuCard'), main = $('stuMain'), sub = $('stuSub');
+    card.className = 'card';
+    main.className = 'stu-main';
+    if (!st) {
+      main.className += ' placeholder'; main.textContent = TEXT[S.mode].stuPh; sub.textContent = '';
+    } else if (st.state === 'loading') {
+      main.className += ' placeholder'; main.textContent = 'Looking up…'; sub.textContent = st.raw;
+    } else {
+      card.className += ' ' + (st.state === 'ok' ? 'ok' : st.state === 'warn' ? 'warn' : 'err');
+      main.textContent = st.name || st.raw;
+      var bits = [];
+      if (st.id) bits.push('SID ' + st.id);
+      if (st.method) bits.push(st.method);
+      if (st.partial) bits.push('matched from card number ' + st.raw);
+      if (st.offline) bits.push('NOT VERIFIED (offline)');
+      if (st.walkIn) bits.push('not on roster');
+      if (S.mode === 'out' && st.existing) bits.push('has ' + st.existing.sheet);
+      sub.textContent = bits.join(' · ');
+    }
+    var sc = $('sheetCard'), sm = $('sheetMain');
+    sc.className = 'card' + (sh ? ' ok' : '');
+    sm.className = 'sheet-main' + (sh ? '' : ' placeholder');
+    sm.textContent = sh ? sh.label : 'Scan QR code';
+    $('sheetSub').textContent = sh && sh.raw.toUpperCase() !== sh.label ? 'entered as ' + sh.raw : '';
+  }
+
+  function setStats(st) {
+    if (!st) return;
+    S.stats = st;
+    var p = $('progress');
+    p.textContent = '';
+    function add(text, bold) {
+      var el = document.createElement(bold ? 'b' : 'span');
+      el.textContent = text;
+      p.appendChild(el);
+    }
+    if (S.mode === 'out') {
+      add('Checked out: '); add(String(st.checkedOut || 0), true);
+      add(' · still in the room: '); add(String(st.stillIn || 0), true);
+    } else {
+      add('Checked in: '); add(String(st.checkedIn), true);
+      add(' of ' + st.total + (st.notOnRoster ? ' · ' + st.notOnRoster + ' not on roster' : '') +
+          (st.checkedOut ? ' · ' + st.checkedOut + ' checked out' : ''));
+    }
+  }
+
+  function setOnline(on) {
+    S.online = on;
+    if (on) S.lastPing = Date.now();
+    var el = $('sync'), n = S.queue.length;
+    if (on && !n) { el.className = 'sync ok'; el.textContent = '● Connected'; }
+    else if (on) { el.className = 'sync off'; el.textContent = '● Uploading ' + n + ' saved scan' + (n > 1 ? 's' : '') + '…'; }
+    else { el.className = 'sync off'; el.textContent = '● Offline' + (n ? ' — ' + n + ' saved on this laptop' : ''); }
+  }
+
+  function time() {
+    return new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' });
+  }
+
+  function recentFrom(d, status, qid) {
+    return { rid: ++S.seq, kind: d.kind || 'in', time: d.time, name: d.name, id: d.id, sheetLabel: d.sheetLabel,
+             sheetKey: d.sheetKey, studentKey: d.studentKey || '', previousKey: '', method: d.method,
+             status: status, note: '', qid: qid || '' };
+  }
+
+  function renderRecent() {
+    var body = $('recentBody');
+    body.textContent = '';
+    $('recentEmpty').hidden = S.recent.length > 0;
+    S.recent.slice(0, 40).forEach(function (r) {
+      var tr = document.createElement('tr');
+      if (r.status === 'undone') tr.className = 'undone';
+      var tk = document.createElement('td'), tag = document.createElement('span');
+      tag.className = 'kind ' + r.kind;
+      tag.textContent = r.kind === 'out' ? 'OUT' : 'IN';
+      tk.appendChild(tag);
+      tr.appendChild(tk);
+      [r.time, r.name, r.id, r.sheetLabel, r.method].forEach(function (v) {
+        var td = document.createElement('td'); td.textContent = v || ''; tr.appendChild(td);
+      });
+      var td = document.createElement('td');
+      var pill = document.createElement('span');
+      pill.className = 'pill ' + r.status;
+      pill.textContent = { saved: 'Saved', pending: 'Waiting to upload', attention: 'Check later', undone: 'Undone',
+                           replaced: 'Taken back' }[r.status] || r.status;
+      td.appendChild(pill);
+      if (r.note) { var n = document.createElement('div'); n.className = 'sub'; n.textContent = r.note; td.appendChild(n); }
+      tr.appendChild(td);
+      var tdb = document.createElement('td');
+      if ((r.status === 'saved' && (r.kind === 'out' || r.studentKey)) || r.status === 'pending') {
+        var b = document.createElement('button');
+        b.className = 'btn small';
+        b.textContent = r.status === 'pending' ? 'Cancel' : 'Undo';
+        b.addEventListener('click', function () { undoClicked(r, b); });
+        tdb.appendChild(b);
+      }
+      tr.appendChild(tdb);
+      body.appendChild(tr);
+    });
+  }
+
+  function addAttention(text) {
+    S.attention.push(text);
+    var ul = $('attList');
+    var li = document.createElement('li');
+    li.textContent = text;
+    ul.appendChild(li);
+    $('attention').hidden = false;
+  }
+
+  function fatal(title, msg) {
+    $('fatalTitle').textContent = title;
+    $('fatalMsg').textContent = msg;
+    $('fatalOverlay').hidden = false;
+  }
+
+  // ------------------------------------------------------------ input
+  function focusScan() {
+    if (!S.started || S.formMode || !$('search').hidden) return;
+    if (document.activeElement !== input) input.focus();
+  }
+  function isField(el) {
+    return el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') && el !== input;
+  }
+  function burst() {   // scanners type a whole code in a few milliseconds per character
+    var t = S.keyTimes;
+    return t.length >= 4 && (t[t.length - 1] - t[0]) / (t.length - 1) < 40;
+  }
+  function noteKey() {
+    var now = performance.now(), t = S.keyTimes;
+    if (t.length && now - t[t.length - 1] > 800) S.keyTimes = t = [];
+    t.push(now);
+    clearTimeout(S.autoTimer);
+    if (burst()) {   // scanner without an Enter suffix: submit once the burst stops
+      S.autoTimer = setTimeout(function () { if (input.value.trim()) submit(); }, 180);
+    }
+  }
+  function submit() {
+    clearTimeout(S.autoTimer);
+    var v = input.value.trim();
+    var scanned = burst();
+    input.value = '';
+    S.keyTimes = [];
+    if (!v || !S.started) return;
+    if (!S.ready) { banner('err', 'Not connected yet', 'Wait for the page to finish connecting, then scan again.'); beep('err'); return; }
+    if (S.busy) { S.backlog.push({ v: v, scanned: scanned }); return; }
+    handle(v, scanned);
+  }
+  function drain() {
+    while (!S.busy && S.backlog.length) {
+      var x = S.backlog.shift();
+      handle(x.v, x.scanned);
+    }
+  }
+
+  input.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); submit(); return; }
+    if (e.key === 'Escape') { e.preventDefault(); cancelAll(); return; }
+    if (e.key && e.key.length === 1 && !e.metaKey && !e.ctrlKey) noteKey();
+  });
+
+  // Keys typed while focus is on a button or the page itself still go to the scan box.
+  document.addEventListener('keydown', function (e) {
+    var t = e.target;
+    if (!S.started || t === input || !$('pauseOverlay').hidden) return;
+    if (e.key === 'Escape') {
+      if (!$('search').hidden) { closeSearch(); e.preventDefault(); return; }
+      if (S.formMode) { cancelAll(); e.preventDefault(); return; }
+    }
+    if (isField(t) || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.key && e.key.length === 1) {
+      e.preventDefault(); input.focus(); input.value += e.key; noteKey();
+    } else if ((e.key === 'Enter' || e.key === 'Tab') && input.value) {
+      e.preventDefault(); input.focus(); submit();
+    } else if (e.key === 'Escape') {
+      e.preventDefault(); cancelAll();
+    }
+  }, true);
+
+  document.addEventListener('click', function (e) {
+    if (!isField(e.target) && e.target.tagName !== 'BUTTON') setTimeout(focusScan, 0);
+  });
+  input.addEventListener('blur', function () {
+    setTimeout(function () {
+      var a = document.activeElement;
+      if (!a || a === document.body) focusScan();
+    }, 150);
+  });
+  function checkFocus() {
+    var paused = S.started && !document.hasFocus() && $('startOverlay').hidden && $('fatalOverlay').hidden;
+    $('pauseOverlay').hidden = !paused;
+  }
+  window.addEventListener('blur', function () { setTimeout(checkFocus, 50); });
+  window.addEventListener('focus', function () { checkFocus(); focusScan(); });
+  $('pauseOverlay').addEventListener('click', function () { $('pauseOverlay').hidden = true; focusScan(); });
+
+  // ------------------------------------------------------------ flow
+  function parseSheet(v) {
+    var s = v.trim().toUpperCase().replace(/\s+/g, '');
+    var pfx = (S.cfg.prefix || 'AS').toUpperCase().replace(/[^0-9A-Z]/g, '');
+    var m = s.match(new RegExp('^' + pfx + '[-_]?0*(\\d{1,7})$'));
+    if (m) return sheetObj(String(Number(m[1])), v);
+    if (/^\d{1,5}$/.test(s)) return sheetObj(String(Number(s)), v);
+    return null;
+  }
+  function sheetObj(key, raw) { return { key: key, label: labelOf(key), raw: raw.trim() }; }
+  function labelOf(key) {
+    if (!/^\d+$/.test(key)) return key;
+    var n = key;
+    while (n.length < (S.cfg.digits || 4)) n = '0' + n;
+    return (S.cfg.prefix || 'AS') + '-' + n;
+  }
+
+  function handle(v, scanned) {
+    var sh = parseSheet(v);
+    var looksLikeId = /^[A-D]?\d{6,14}[A-D]?$/i.test(v.replace(/[\s-]/g, ''));
+    if (!sh && S.cfg.acceptAnySheetCode && !looksLikeId &&
+        (S.mode === 'out' || (S.student && S.student.state === 'ok'))) {
+      sh = { key: v.trim().toUpperCase(), label: v.trim().toUpperCase(), raw: v.trim() };
+    }
+    var method = scanned ? 'Card scan' : 'Typed SID';
+    if (S.mode === 'out') {
+      if (sh) gotSheetOut(sh); else gotIdOut(v, method);
+    } else {
+      if (sh) gotSheet(sh); else gotId(v, method);
+    }
+  }
+
+  // ---- check-in
+
+  function gotSheet(sh) {
+    var dup = S.recent.filter(function (r) {
+      return r.kind === 'in' && r.sheetKey === sh.key &&
+             (r.status === 'saved' || r.status === 'pending' || r.status === 'replaced');
+    })[0];
+    if (dup) {
+      beep('err');
+      banner('err', sh.label + (dup.status === 'replaced' ? ' was taken back' : ' was already handed out'),
+        (dup.status === 'replaced' ? 'It was replaced for ' + dup.name + ' and must not be reused. '
+          : 'It went to ' + dup.name + ' at ' + dup.time + '. ') +
+        'Set this sheet aside and scan a different one.' +
+        (S.student && S.student.state === 'ok' ? ' ' + S.student.name + ' still needs a sheet.' : ''));
+      return;
+    }
+    if (S.student && (S.student.state === 'warn' || S.student.state === 'error')) {
+      S.sheet = sh;   // keep it; the proctor still has to choose one of the buttons above
+      renderCards();
+      beep('warn');
+      return;
+    }
+    S.sheet = sh;
+    if (S.student && S.student.state === 'ok') { doCheckIn(); return; }
+    if (!S.student) beep('tick');
+    idle();
+  }
+
+  function gotId(raw, method) {
+    S.student = { state: 'loading', raw: raw, method: method };
+    renderCards();
+    banner('info', 'Looking up ' + raw + '…', '');
+    S.busy = true;
+    var mine = S.student;
+    call('apiLookup', raw, 10000).then(function (r) {
+      S.busy = false;
+      if (S.student !== mine) return drain();   // cancelled meanwhile
+      setOnline(true);
+      if (!r.ok) {
+        S.student = { state: 'error', raw: raw, method: method };
+        beep('err'); banner('err', 'Lookup failed', r.message || ''); renderCards();
+      } else if (r.status === 'found') {
+        foundStudent({ key: r.student.key, id: r.student.id, name: r.student.name, raw: raw, method: method,
+                       partial: r.match === 'partial', existing: r.existing });
+      } else if (r.status === 'ambiguous') {
+        S.student = { state: 'error', raw: raw, method: method };
+        beep('err');
+        banner('err', 'That ID matches more than one student', 'Use Find by name instead.', [
+          { label: 'Find by name', primary: true, fn: openSearch }, { label: 'Cancel', fn: cancelAll }]);
+        renderCards();
+      } else {
+        notOnRoster(raw, method);
+      }
+      drain();
+    }, function () {
+      S.busy = false;
+      if (S.student !== mine) return drain();
+      setOnline(false);
+      S.student = { state: 'ok', offline: true, raw: raw, id: raw, name: 'ID ' + raw, method: method };
+      beep('warn');
+      banner('warn', 'Offline — can’t check the roster right now',
+        'Check the photo and name on the ID card yourself, then scan the answer sheet. ' +
+        'The check-in is saved on this laptop and uploaded when the connection returns.');
+      renderCards();
+      if (S.sheet) doCheckIn();
+      drain();
+    });
+  }
+
+  function foundStudent(st) {
+    if (st.existing) {
+      var ex = st.existing;
+      st.state = 'warn';
+      S.student = st;
+      renderCards();
+      beep('warn');
+      if (ex.out) {
+        banner('warn', st.name + ' already turned in their sheet',
+          'Checked in with ' + ex.sheet + ' and checked out at ' + ex.out + '.', [
+            { label: 'OK', primary: true, fn: cancelAll }]);
+        return;
+      }
+      banner('warn', st.name + ' is already checked in',
+        'Has ' + ex.sheet + (ex.time ? ' since ' + ex.time : '') + ' (' + ex.station + '). ' +
+        'Only give a new sheet if the student is replacing a damaged one — and take the old one back.', [
+          { label: 'Cancel', primary: true, fn: cancelAll },
+          { label: 'Give a replacement sheet', fn: function () {
+              st.state = 'ok'; st.replace = true;
+              if (S.sheet) doCheckIn(); else { beep('tick'); idle(); }
+              focusScan();
+            } }
+        ]);
+      return;
+    }
+    st.state = 'ok';
+    S.student = st;
+    if (S.sheet) { doCheckIn(); return; }
+    beep('tick');
+    idle();
+  }
+
+  function notOnRoster(raw, method) {
+    S.student = { state: 'error', raw: raw, method: method };
+    renderCards();
+    beep('err');
+    banner('err', raw + ' is not on the roster',
+      'Re-scan or check the number. If the student really belongs in this exam, record them anyway.', [
+        { label: 'Cancel', primary: true, fn: cancelAll },
+        { label: 'Record anyway…', fn: function () {
+            banner('warn', 'Not on roster: ' + raw, 'Type the student’s name, then press Enter.', [
+              { label: 'Cancel', fn: cancelAll }], true);
+          } }
+      ]);
+  }
+
+  function walkInNameEntered() {
+    var name = $('walkName').value.trim();
+    if (!name || !S.student) { $('walkName').focus(); return; }
+    var st = S.student;
+    S.student = { state: 'ok', walkIn: true, walkInName: name, name: name, raw: st.raw, id: st.raw, method: st.method };
+    banner('info', 'Now scan the answer sheet', 'for ' + name + ' (not on roster)');
+    S.formMode = false; $('bForm').hidden = true;
+    renderCards();
+    if (S.sheet) doCheckIn();
+    focusScan();
+  }
+
+  function doCheckIn() {
+    var st = S.student, sh = S.sheet;
+    var req = { studentKey: st.key || '', studentRaw: st.raw || st.id || '', walkIn: !!st.walkIn,
+                walkInName: st.walkInName || '', replace: !!st.replace, sheetRaw: sh.raw,
+                station: S.station, method: st.method, queued: false };
+    var disp = { kind: 'in', time: time(), name: st.name, id: st.id || st.raw, sheetLabel: sh.label, sheetKey: sh.key,
+                 studentKey: st.key || '', method: st.method };
+    if (st.offline || !S.online) { enqueue('in', req, disp); return; }
+    S.busy = true;
+    banner('info', 'Saving…', st.name + ' → ' + sh.label);
+    call('apiCheckIn', req, 15000).then(function (r) {
+      S.busy = false;
+      setOnline(true);
+      if (r.ok) {
+        var rec = recentFrom(disp, 'saved');
+        rec.name = r.student ? r.student.name : disp.name;
+        rec.studentKey = r.student && r.student.key ? r.student.key : '';
+        rec.previousKey = r.previousKey || '';
+        if (r.walkIn) rec.note = 'not on roster';
+        if (r.previousKey) {   // the old sheet was taken back
+          S.recent.forEach(function (x) {
+            if (x.kind === 'in' && x.sheetKey === r.previousKey && x.studentKey === rec.studentKey && x.status === 'saved') {
+              x.status = 'replaced';
+            }
+          });
+        }
+        S.recent.unshift(rec);
+        renderRecent();
+        setStats(r.stats);
+        S.student = null; S.sheet = null;
+        beep('ok');
+        banner('ok', '✔ ' + rec.name + ' → ' + disp.sheetLabel,
+          r.previous ? 'Replacement recorded. Take back ' + r.previous + '. Ready for the next student.'
+            : r.walkIn ? 'Recorded on the Not on Roster tab. Ready for the next student.'
+            : 'Hand over the sheet. Ready for the next student.');
+        renderCards();
+      } else if (r.retry) {
+        enqueue('in', req, disp);
+      } else if (r.error === 'SHEET_USED' || r.error === 'BAD_SHEET') {
+        S.sheet = null;
+        beep('err');
+        banner('err', sh.label + ' can’t be used', (r.message || '') + (S.student ? ' ' + S.student.name + ' still needs a sheet.' : ''));
+        renderCards();
+      } else if (r.error === 'ALREADY_CHECKED_IN') {
+        S.sheet = null;
+        foundStudent({ key: r.student.key, id: r.student.id, name: r.student.name, raw: st.raw,
+                       method: st.method, existing: r.existing });
+      } else {
+        S.sheet = null;
+        beep('err');
+        banner('err', 'Not saved', r.message || 'Unknown problem.');
+        renderCards();
+      }
+      drain();
+    }, function () {
+      S.busy = false;
+      setOnline(false);
+      enqueue('in', req, disp);
+      drain();
+    });
+  }
+
+  // ---- check-out
+
+  function gotSheetOut(sh) {
+    var dup = S.recent.filter(function (r) {
+      return r.kind === 'out' && r.sheetKey === sh.key && (r.status === 'saved' || r.status === 'pending');
+    })[0];
+    if (dup) {
+      beep('warn');
+      banner('warn', sh.label + ' is already checked out',
+        (dup.name ? dup.name + ', ' : '') + 'at ' + dup.time + ' at this station. Nothing more to do.' +
+        (S.student && S.student.state === 'ok' ? ' Still waiting for ' + S.student.name + '’s sheet.' : ''));
+      return;
+    }
+    if (S.student && S.student.state === 'error') S.student = null;
+    S.sheet = sh;
+    if (S.student && S.student.state === 'warn') {   // a question above still needs an answer
+      renderCards();
+      beep('warn');
+      return;
+    }
+    doCheckOut();
+  }
+
+  function gotIdOut(raw, method) {
+    S.student = { state: 'loading', raw: raw, method: method };
+    renderCards();
+    banner('info', 'Looking up ' + raw + '…', '');
+    S.busy = true;
+    var mine = S.student;
+    call('apiLookup', raw, 10000).then(function (r) {
+      S.busy = false;
+      if (S.student !== mine) return drain();
+      setOnline(true);
+      if (!r.ok || r.status === 'ambiguous') {
+        S.student = { state: 'error', raw: raw, method: method };
+        beep('err');
+        banner('err', r.ok ? 'That ID matches more than one student' : 'Lookup failed',
+          r.ok ? 'Just scan the answer sheet instead.' : (r.message || ''));
+        renderCards();
+      } else if (r.status !== 'found') {
+        S.student = { state: 'ok', walkIn: true, raw: raw, id: raw, name: 'ID ' + raw, method: method };
+        if (S.sheet) doCheckOut();
+        else {
+          beep('tick');
+          banner('info', raw + ' is not on the roster', 'Scan the answer sheet they are turning in.');
+          renderCards();
+        }
+      } else {
+        foundStudentOut({ key: r.student.key, id: r.student.id, name: r.student.name, raw: raw, method: method,
+                          partial: r.match === 'partial', existing: r.existing });
+      }
+      drain();
+    }, function () {
+      S.busy = false;
+      if (S.student !== mine) return drain();
+      setOnline(false);
+      S.student = { state: 'ok', offline: true, raw: raw, id: raw, name: 'ID ' + raw, method: method };
+      if (S.sheet) doCheckOut();
+      else {
+        beep('warn');
+        banner('warn', 'Offline — can’t check the roster right now',
+          'Scan the answer sheet. The check-out is saved on this laptop and uploaded when the connection returns.');
+        renderCards();
+      }
+      drain();
+    });
+  }
+
+  function foundStudentOut(st) {
+    var ex = st.existing;
+    S.student = st;
+    if (ex && ex.out) {
+      st.state = 'warn';
+      S.sheet = null;
+      beep('warn');
+      banner('warn', st.name + ' already checked out', 'Turned in ' + ex.sheet + ' at ' + ex.out + '. Nothing more to do.', [
+        { label: 'OK', primary: true, fn: cancelAll }]);
+      renderCards();
+      return;
+    }
+    if (!ex) {
+      st.state = 'warn';
+      beep('warn');
+      banner('warn', st.name + ' was not checked in',
+        S.sheet ? 'Record ' + S.sheet.label + ' as their answer sheet and check them out?'
+                : 'If they took the exam, record the answer sheet they are turning in and check them out.', [
+          { label: 'Cancel', primary: true, fn: cancelAll },
+          { label: S.sheet ? 'Record ' + S.sheet.label + ' and check out' : 'Record their sheet and check out',
+            fn: function () {
+              st.state = 'ok'; st.late = true;
+              if (S.sheet) doCheckOut();
+              else { beep('tick'); banner('info', 'Now scan the answer sheet', st.name + ' is turning in.'); renderCards(); }
+              focusScan();
+            } }
+        ]);
+      renderCards();
+      return;
+    }
+    st.state = 'ok';
+    if (S.sheet) { doCheckOut(); return; }
+    beep('tick');
+    banner('info', st.name + ' has ' + ex.sheet, 'Scan the answer sheet they are turning in.');
+    renderCards();
+  }
+
+  function doCheckOut() {
+    var st = S.student, sh = S.sheet;
+    var req = { sheetRaw: sh.raw, studentKey: st && st.key || '', studentRaw: st && st.raw || '',
+                late: !!(st && st.late), station: S.station, queued: false };
+    var disp = { kind: 'out', time: time(), name: st && !st.offline && !st.walkIn ? st.name : '', id: st && st.id || '',
+                 sheetLabel: sh.label, sheetKey: sh.key, studentKey: st && st.key || '', method: '' };
+    if ((st && st.offline) || !S.online) { enqueue('out', req, disp); return; }
+    S.busy = true;
+    banner('info', 'Checking out ' + sh.label + '…', disp.name);
+    call('apiCheckOut', req, 15000).then(function (r) {
+      S.busy = false;
+      setOnline(true);
+      if (r.stats) setStats(r.stats);
+      if (r.ok) {
+        S.student = null; S.sheet = null;
+        var name = r.student ? r.student.name : sh.label;
+        if (r.already) {
+          beep('warn');
+          banner('warn', name + ' was already checked out', sh.label + ' was turned in at ' + r.outTime + '. Nothing more to do.');
+        } else {
+          var rec = recentFrom(disp, 'saved');
+          rec.name = name;
+          rec.id = r.student ? r.student.id : disp.id;
+          rec.studentKey = r.student && r.student.key ? r.student.key : '';
+          rec.note = r.late ? 'was not checked in' : r.walkIn ? 'not on roster' : '';
+          S.recent.unshift(rec);
+          renderRecent();
+          beep('ok');
+          banner('ok', '✔ Checked out: ' + name, sh.label + ' turned in.' +
+            (r.late ? ' They hadn’t been checked in, so the sheet is now recorded for them.' : '') + ' Next sheet.');
+        }
+        renderCards();
+      } else if (r.retry) {
+        enqueue('out', req, disp);
+      } else if (r.error === 'NOT_ISSUED' && !st) {
+        beep('err');   // keep the sheet: scanning the student's ID next finishes the check-out
+        banner('err', sh.label + ' wasn’t handed out at check-in',
+          'Scan the student’s ID card (or type the SID) to record who turned it in.', [
+            { label: 'Cancel', primary: true, fn: cancelAll }]);
+        renderCards();
+      } else if (r.error === 'NOT_CHECKED_IN' && r.student) {
+        foundStudentOut({ key: r.student.key, id: r.student.id, name: r.student.name, raw: st ? st.raw : '',
+                          method: st ? st.method : '', existing: null });
+      } else {
+        S.student = null; S.sheet = null;
+        beep('err');
+        banner('err', 'Not checked out', r.message || 'Unknown problem.');
+        renderCards();
+      }
+      drain();
+    }, function () {
+      S.busy = false;
+      setOnline(false);
+      enqueue('out', req, disp);
+      drain();
+    });
+  }
+
+  // ---- offline queue (check-ins and check-outs)
+
+  function enqueue(kind, req, disp) {
+    req.queued = true;
+    var item = { qid: 'q' + Date.now() + Math.random().toString(36).slice(2, 7), kind: kind, req: req, disp: disp };
+    S.queue.push(item);
+    saveQueue();
+    S.recent.unshift(recentFrom(disp, 'pending', item.qid));
+    renderRecent();
+    S.student = null; S.sheet = null;
+    beep('ok');
+    banner('warn', '✔ Saved on this laptop: ' + (kind === 'out'
+        ? 'check-out of ' + disp.sheetLabel + (disp.name ? ' (' + disp.name + ')' : '')
+        : disp.name + ' → ' + disp.sheetLabel),
+      'No connection right now. It will upload automatically — keep this page open. ' +
+      (kind === 'out' ? 'Next sheet.' : 'Ready for the next student.'));
+    S.offlineBanner = true;
+    renderCards();
+    setOnline(S.online);
+  }
+
+  function flush() {
+    if (S.flushing || !S.queue.length || !S.ready) return;
+    S.flushing = true;
+    var item = S.queue[0];
+    var out = item.kind === 'out';
+    call(out ? 'apiCheckOut' : 'apiCheckIn', item.req, 20000).then(function (r) {
+      S.flushing = false;
+      setOnline(true);
+      if (!r.ok && r.retry) return;
+      S.queue.shift();
+      saveQueue();
+      var rec = S.recent.filter(function (x) { return x.qid === item.qid; })[0];
+      var what = out ? 'offline check-out at ' : 'offline check-in at ';
+      if (r.ok) {
+        if (rec) {
+          rec.status = r.attention ? 'attention' : 'saved';
+          if (r.student) { rec.name = r.student.name; rec.id = r.student.id || rec.id; rec.studentKey = r.student.key || ''; }
+          rec.previousKey = r.previousKey || '';
+          rec.note = r.attention || (r.already && out ? 'was already checked out' : r.late ? 'was not checked in' : '');
+        }
+        if (r.attention) addAttention(item.disp.sheetLabel + ': ' + r.attention + ' (' + what + item.disp.time + ').');
+        setStats(r.stats);
+      } else {
+        if (rec) {
+          rec.status = 'attention'; rec.note = r.message || '';
+          if (r.student) rec.name = r.student.name;
+        }
+        addAttention(item.disp.sheetLabel + (item.disp.name || (r.student && r.student.name)
+            ? ' / ' + (r.student ? r.student.name : item.disp.name) : '') +
+          ' (' + what + item.disp.time + '): ' + (r.message || 'not saved'));
+        if (r.stats) setStats(r.stats);
+        beep('err');
+      }
+      renderRecent();
+      setOnline(true);
+      if (!S.queue.length && S.offlineBanner) {
+        S.offlineBanner = false;
+        banner('ok', 'Back online', 'Everything saved on this laptop has been uploaded.');
+      }
+      flush();
+    }, function () {
+      S.flushing = false;
+      setOnline(false);
+    });
+  }
+
+  function heartbeat() {
+    if (!S.ready) return;
+    if (S.queue.length) { flush(); return; }
+    if (Date.now() - S.lastPing < 20000 && S.online) return;
+    call('apiStats', null, 10000).then(function (r) {
+      setOnline(true);
+      if (r.ok) setStats(r.stats);
+    }, function () { setOnline(false); });
+  }
+
+  function cancelAll() {
+    S.student = null; S.sheet = null; S.backlog = [];
+    closeSearch(true);
+    S.formMode = false; $('bForm').hidden = true;
+    idle(TEXT[S.mode].cancelled);
+    focusScan();
+  }
+
+  function undoClicked(r, btn) {
+    if (!btn.dataset.armed) {
+      btn.dataset.armed = '1';
+      btn.textContent = r.status === 'pending' ? 'Really cancel?' : 'Really undo?';
+      btn.className = 'btn small danger';
+      setTimeout(function () { if (btn.isConnected) renderRecent(); }, 4000);
+      return;
+    }
+    var what = r.kind === 'out' ? 'check-out of ' + r.sheetLabel + (r.name ? ' (' + r.name + ')' : '')
+                                : r.name + ' → ' + r.sheetLabel;
+    if (r.status === 'pending') {
+      var i = -1;
+      S.queue.forEach(function (q, k) { if (q.qid === r.qid) i = k; });
+      if (i < 0 || (i === 0 && S.flushing)) {
+        banner('warn', 'Uploading right now', 'Wait a moment, then use Undo.');
+        return;
+      }
+      S.queue.splice(i, 1); saveQueue();
+      r.status = 'undone'; renderRecent(); setOnline(S.online);
+      banner('ok', 'Cancelled: ' + what, r.kind === 'out' ? '' : 'Take the answer sheet back.');
+      focusScan();
+      return;
+    }
+    btn.disabled = true;
+    var p = r.kind === 'out'
+      ? call('apiUndoCheckOut', { sheetKey: r.sheetKey, station: S.station }, 15000)
+      : call('apiUndo', { studentKey: r.studentKey, sheetKey: r.sheetKey, previousKey: r.previousKey, station: S.station }, 15000);
+    p.then(function (res) {
+      if (res.ok) {
+        r.status = 'undone';
+        if (res.restored) {
+          S.recent.forEach(function (x) {
+            if (x.kind === 'in' && x.sheetKey === r.previousKey && x.studentKey === r.studentKey && x.status === 'replaced') x.status = 'saved';
+          });
+        }
+        setStats(res.stats);
+        banner('ok', 'Undone: ' + what, r.kind === 'out' ? 'The sheet is no longer marked as turned in.'
+          : res.restored ? 'Back to ' + res.restored + '. Take ' + r.sheetLabel + ' back.' : 'Take the answer sheet back.');
+      } else {
+        banner('err', 'Could not undo', res.message || '');
+        beep('err');
+      }
+      renderRecent(); focusScan();
+    }, function (e) {
+      banner('err', 'Could not undo (no connection)', 'Try again in a moment. ' + errText(e));
+      beep('err'); renderRecent();
+    });
+  }
+
+  // ------------------------------------------------------------ name search
+  var searchTimer = null, searchSeq = 0;
+  function openSearch() {
+    $('search').hidden = false;
+    $('q').value = '';
+    $('results').textContent = '';
+    $('searchMsg').textContent = 'Type at least 2 letters.';
+    $('q').focus();
+  }
+  function closeSearch(silent) {
+    $('search').hidden = true;
+    if (!silent) focusScan();
+  }
+  function runSearch() {
+    var q = $('q').value.trim();
+    var mine = ++searchSeq;
+    if (q.length < 2) { $('results').textContent = ''; $('searchMsg').textContent = 'Type at least 2 letters.'; return; }
+    $('searchMsg').textContent = 'Searching…';
+    call('apiSearch', q, 10000).then(function (r) {
+      if (mine !== searchSeq) return;
+      var ul = $('results');
+      ul.textContent = '';
+      if (!r.ok) { $('searchMsg').textContent = r.message || 'Search failed.'; return; }
+      $('searchMsg').textContent = r.total ? (r.total > r.results.length ? 'Showing ' + r.results.length + ' of ' + r.total + ' — type more of the name.' : '') : 'No match.';
+      r.results.forEach(function (s, i) {
+        var li = document.createElement('li');
+        var b = document.createElement('button');
+        b.className = 'btn' + (i === 0 ? ' primary' : '');
+        b.textContent = s.name + '  —  SID ' + s.id + '  ';
+        if (s.existing) {
+          var tag = document.createElement('span');
+          tag.className = 'tag';
+          tag.textContent = s.existing.out ? 'checked out at ' + s.existing.out
+            : (S.mode === 'out' ? 'has ' : 'already has ') + s.existing.sheet;
+          b.appendChild(tag);
+        } else if (S.mode === 'out') {
+          var tag2 = document.createElement('span');
+          tag2.className = 'tag';
+          tag2.textContent = 'not checked in';
+          b.appendChild(tag2);
+        }
+        b.addEventListener('click', function () { pick(s); });
+        li.appendChild(b);
+        ul.appendChild(li);
+      });
+    }, function () {
+      if (mine !== searchSeq) return;
+      $('searchMsg').textContent = 'Search needs a connection. Type the student’s SID in the scan box instead.';
+    });
+  }
+  function pick(s) {
+    closeSearch(true);
+    var st = { key: s.key, id: s.id, name: s.name, raw: s.id, method: 'Name search', existing: s.existing };
+    if (S.mode === 'out') foundStudentOut(st); else foundStudent(st);
+    focusScan();
+  }
+
+  // ------------------------------------------------------------ still in the room
+  function openStill() { $('still').hidden = false; loadStill(); }
+  function loadStill() {
+    $('stillMsg').textContent = 'Loading…';
+    call('apiStillIn', null, 15000).then(function (r) {
+      if (!r.ok) { $('stillMsg').textContent = r.message || 'Could not load the list.'; return; }
+      setStats(r.stats);
+      $('stillTitle').textContent = 'Still in the room: ' + r.total;
+      $('stillMsg').textContent = r.total
+        ? 'Checked in, but their answer sheet hasn’t been scanned at check-out yet.' +
+          (r.total > r.students.length ? ' Showing the first ' + r.students.length + '.' : '')
+        : 'Everyone who checked in has turned in an answer sheet.';
+      var body = $('stillBody');
+      body.textContent = '';
+      r.students.forEach(function (s) {
+        var tr = document.createElement('tr');
+        [s.name, s.id, s.sheet].forEach(function (v) {
+          var td = document.createElement('td'); td.textContent = v; tr.appendChild(td);
+        });
+        body.appendChild(tr);
+      });
+    }, function () {
+      $('stillMsg').textContent = 'This needs a connection. Try again in a moment.';
+    });
+  }
+
+  // ------------------------------------------------------------ modes and start-up
+  function setMode(m) {
+    S.mode = m === 'out' ? 'out' : 'in';
+    lsSet(MODEKEY, S.mode);
+    document.body.classList.toggle('out', S.mode === 'out');
+    $('modeIn').className = S.mode === 'in' ? 'on' : '';
+    $('modeOut').className = S.mode === 'out' ? 'on' : '';
+    input.placeholder = TEXT[S.mode].placeholder;
+    document.title = (S.cfg ? S.cfg.exam + ' ' : 'Exam ') + TEXT[S.mode].word;
+    $('still').hidden = true;
+    S.student = null; S.sheet = null; S.backlog = [];
+    closeSearch(true);
+    S.formMode = false; $('bForm').hidden = true;
+    setStats(S.stats);
+    idle();
+  }
+  function modeClicked(m) {
+    if (m === S.mode) { focusScan(); return; }
+    setMode(m);
+    beep('tick');
+    focusScan();
+  }
+
+  function chooseStation(st) {
+    S.station = st;
+    lsSet(STKEY, st);
+    $('stationBtn').textContent = st;
+    $('startOverlay').hidden = true;
+    S.started = true;
+    initAudio();
+    beep('tick');
+    idle();
+    focusScan();
+  }
+  function highlightStation(st) {
+    Array.prototype.forEach.call(document.querySelectorAll('#stations button'), function (b) {
+      b.className = 'btn big' + (b.getAttribute('data-st') === st ? ' primary' : '');
+    });
+  }
+  function connect() {
+    $('startMsg').textContent = 'Connecting…';
+    call('apiInit', null, 30000).then(function (r) {
+      if (!r.ok) {
+        fatal(r.error === 'NOT_STAFF' || r.error === 'NOT_SIGNED_IN' ? 'This account can’t use check-in' : 'Setup problem',
+              r.message || 'Unknown error.');
+        return;
+      }
+      S.cfg = r; S.ready = true;
+      $('exam').textContent = r.exam;
+      document.title = r.exam + ' ' + TEXT[S.mode].word;
+      $('who').textContent = r.email;
+      $('fatalOverlay').hidden = true;
+      $('startMsg').textContent = 'Connected' + (r.email ? ' as ' + r.email : '') + '.';
+      setStats(r.stats);
+      setOnline(true);
+      flush();
+    }, function (e) {
+      fatal('Can’t reach Google', 'Check the Wi-Fi, then click Try again. (' + errText(e) + ')');
+    });
+  }
+
+  Array.prototype.forEach.call(document.querySelectorAll('#stations button'), function (b) {
+    b.addEventListener('click', function () { chooseStation(b.getAttribute('data-st')); });
+  });
+  $('stationBtn').addEventListener('click', function () {
+    S.started = false; input.blur(); $('startOverlay').hidden = false; highlightStation(S.station);
+  });
+  $('modeIn').addEventListener('click', function () { modeClicked('in'); });
+  $('modeOut').addEventListener('click', function () { modeClicked('out'); });
+  $('findBtn').addEventListener('click', openSearch);
+  $('stillBtn').addEventListener('click', openStill);
+  $('stillRefresh').addEventListener('click', loadStill);
+  $('stillClose').addEventListener('click', function () { $('still').hidden = true; focusScan(); });
+  $('cancelBtn').addEventListener('click', cancelAll);
+  $('searchClose').addEventListener('click', function () { closeSearch(); });
+  $('q').addEventListener('input', function () { clearTimeout(searchTimer); searchTimer = setTimeout(runSearch, 250); });
+  $('q').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') { e.preventDefault(); var first = $('results').querySelector('button'); if (first) first.click(); }
+    if (e.key === 'Escape') { e.preventDefault(); closeSearch(); }
+  });
+  $('walkGo').addEventListener('click', walkInNameEntered);
+  $('walkName').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') { e.preventDefault(); walkInNameEntered(); }
+  });
+  $('fatalRetry').addEventListener('click', function () { $('fatalOverlay').hidden = true; connect(); });
+  $('attDismiss').addEventListener('click', function () { $('attention').hidden = true; $('attList').textContent = ''; });
+
+  loadQueue();
+  renderRecent();
+  setMode(lsGet(MODEKEY) || 'in');
+  var saved = lsGet(STKEY);
+  if (saved) highlightStation(saved);
+  try {
+    google.script.url.getLocation(function (loc) {
+      var p = (loc && loc.parameter) || {};
+      if (p.station) highlightStation(/^\d+$/.test(p.station) ? 'Station ' + p.station : p.station);
+      if (p.mode === 'out' || p.mode === 'in') setMode(p.mode);
+    });
+  } catch (e) { /* not available outside Apps Script */ }
+  connect();
+  setInterval(heartbeat, 5000);
+  setInterval(checkFocus, 1000);
+})();
+</script>
+</body>
+</html>
